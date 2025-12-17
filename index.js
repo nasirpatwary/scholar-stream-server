@@ -43,7 +43,7 @@ const verifyToken = (req, res, next) => {
 async function run() {
   const db = client.db("scholarStreamDB");
   const userCollection = db.collection("users");
-
+  const scholarshipCollection = db.collection("scholarships");
   const verifyAdmin = async (req, res, next) => {
     const email = req.token_email
     const query = {email}
@@ -91,7 +91,7 @@ async function run() {
       res.send(result)
 
     })
-    app.get("/users/:email/role", verifyToken, async (req, res) => {
+    app.get("/users/:email/role", async (req, res) => {
       const {email} = req.params;
       const query = {email}
       const user = await userCollection.findOne(query)
@@ -126,6 +126,66 @@ async function run() {
       res.send({role: updateRole.role})
     })
 
+    // scholarshipCollection
+    app.get("/scholarships",verifyToken, async (req, res) => {
+      const {search="",subject="",
+      category="", limit=6, skip=0} = req.query
+      const query = {}
+      if (search) {
+         query.$or = [
+        { scholarshipName: { $regex: search, $options: "i" } },
+        { universityName: { $regex: search, $options: "i" } },
+        { degree: { $regex: search, $options: "i" } },
+      ];
+      }
+       if (subject) {
+        query.subjectCategory = subject; 
+      }
+
+      if (category) {
+        query.scholarshipCategory = category;
+      }
+      console.log(query)
+      const sorted = {scholarshipPostDate: -1}
+      const scholarships = await scholarshipCollection.find(query).sort(sorted).skip(Number(skip)).limit(Number(limit)).toArray()
+      const totalCount = await scholarshipCollection.countDocuments(query)
+      res.send({scholarships, totalCount})
+    })
+    app.get("/scholarships/:email/manage", verifyToken, async (req, res) => {
+      const {email} = req.params
+      const query = {postedUserEmail: email}
+      const createPorject = {postedUserEmail: 1, applicationFees: 1, serviceCharge: 1, scholarshipPostDate: 1, applicationDeadline: 1}
+      const result = await scholarshipCollection.find(query).project(createPorject).toArray()
+      res.send(result)
+    })
+    app.get("/scholarships/:id/details", verifyToken, async (req, res) => {
+      const {id} = req.params
+      const query = {_id: new ObjectId(id)}
+      const result = await scholarshipCollection.findOne(query)
+      res.send(result)
+    })
+    app.post("/scholarships", verifyToken, async (req, res) => {
+      const newShcolarship = req.body;
+      const result = await scholarshipCollection.insertOne(newShcolarship)
+      res.send(result)
+    })
+    app.patch("/scholarships/:id/update/scholarship", verifyToken, async (req, res) => {
+      const {id} = req.params;
+      const scholarship = req.body
+      const query = {_id: new ObjectId(id)}
+      const updateDoc = {
+        $set: scholarship
+      }
+      const result = await scholarshipCollection.updateOne(query, updateDoc)
+      res.send(result)
+    })
+    app.delete("/scholarships/:id",verifyToken, async (req, res) => {
+      const {id} = req.params;
+      const query = {_id: new ObjectId(id)}
+      const result = await scholarshipCollection.deleteOne(query)
+      res.send(result)
+    })
+    
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"

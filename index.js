@@ -44,6 +44,7 @@ async function run() {
   const db = client.db("scholarStreamDB");
   const userCollection = db.collection("users");
   const scholarshipCollection = db.collection("scholarships");
+  const applicationCollection = db.collection("applications ");
   const verifyAdmin = async (req, res, next) => {
     const email = req.token_email
     const query = {email}
@@ -183,6 +184,65 @@ async function run() {
       const {id} = req.params;
       const query = {_id: new ObjectId(id)}
       const result = await scholarshipCollection.deleteOne(query)
+      res.send(result)
+    })
+
+    // applicationCollection
+    app.get("/applications/manage", verifyToken, async (req, res) => {
+      const result = await applicationCollection.find().toArray()
+      res.send(result)
+    })
+    app.get("/applications/:email/applied", verifyToken, async (req, res) => {
+      const {email} = req.params
+      const query = {userEmail: email}
+      const result = await applicationCollection.find(query).toArray()
+      res.send(result)
+    })
+      app.get("/applications/:id/details", verifyToken, async (req, res) => {
+      const {id} = req.params
+      const query = {_id: new ObjectId(id)}
+      const result = await applicationCollection.findOne(query)
+      res.send(result)
+    })
+    app.patch("/applications/:id/status", verifyToken, async (req, res) => {
+      const {id} = req.params
+      const {applicationStatus} = req.body
+      const query = {_id: new ObjectId(id)}
+      const updateStatus = await applicationCollection.findOneAndUpdate(query, 
+        {$set: {applicationStatus}},
+        {returnDocument: "after"}
+      )
+      res.send({applicationStatus: updateStatus.applicationStatus})
+    })
+    app.post("/applications", verifyToken,  async (req, res) => {
+      const newApplication = req.body;
+      const result = await applicationCollection.insertOne(newApplication)
+      res.send(result)
+    })
+    app.patch("/applications/:id/feedback", verifyToken, async (req, res) => {
+      const {id} = req.params
+      const {feedback} = req.body
+      const query = {_id: new ObjectId(id)}
+      const updateFeedBack = await applicationCollection.findOneAndUpdate(query, 
+        {$set: {feedback}},
+        {returnDocument: "after"}
+      )
+      res.send({feedback: updateFeedBack.feedback})
+    })
+    app.patch("/applications/:id/update/application", verifyToken, async (req, res) => {
+      const {id} = req.params;
+      const application = req.body
+      const query = {_id: new ObjectId(id)}
+      const updateDoc = {
+        $set: application
+      }
+      const result = await applicationCollection.updateOne(query, updateDoc)
+      res.send(result)
+    })
+    app.delete("/applications/:id", verifyToken, async (req, res) => {
+      const {id} = req.params;
+      const query = {_id: new ObjectId(id)}
+      const result = await applicationCollection.deleteOne(query)
       res.send(result)
     })
     

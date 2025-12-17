@@ -2,9 +2,9 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 require("dotenv").config();
-const port = process.env.PORT || 5000;
 const cookieParser = require('cookie-parser')
 const jwt = require('jsonwebtoken');
+const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 // middleware
@@ -26,7 +26,6 @@ const client = new MongoClient(process.env.URI, {
 });
 
 // verifyToken
-
 const verifyToken = (req, res, next) => {
   const token = req.cookies?.token;
   console.log("token ----->", token)
@@ -44,6 +43,16 @@ const verifyToken = (req, res, next) => {
 async function run() {
   const db = client.db("scholarStreamDB");
   const userCollection = db.collection("users");
+
+  const verifyAdmin = async (req, res, next) => {
+    const email = req.token_email
+    const query = {email}
+    const user = await userCollection.findOne(query)
+    if (!user || !user.role === "admin") {
+      return res.status(403).send({ message: "forbidden access" });
+    }
+    next()
+  }
   try {
     // jwt token post and login
   app.post("/login", async (req, res) => {
@@ -64,7 +73,7 @@ async function run() {
 
   res.send({ message: "JWT stored in cookie" });
     });
-
+    // logout
   app.get("/logout", (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
@@ -74,10 +83,7 @@ async function run() {
 
   res.send({ message: "Logged out!" });
   });
-
-
   // userCollection
-
     app.get("/users/:email", verifyToken,  async (req, res) => {
       const {email} = req.params
       const query = {email: {$ne: email}}
@@ -109,7 +115,7 @@ async function run() {
       });
       res.send(result);
     });
-    app.patch("/users/:id/role", verifyToken, async (req, res) => {
+    app.patch("/users/:id/role", verifyToken, verifyAdmin, async (req, res) => {
       const {id} = req.params
       const {role} = req.body
       const query = {_id: new ObjectId(id)}

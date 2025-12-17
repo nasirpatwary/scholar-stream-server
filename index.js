@@ -45,6 +45,7 @@ async function run() {
   const userCollection = db.collection("users");
   const scholarshipCollection = db.collection("scholarships");
   const applicationCollection = db.collection("applications ");
+  const reviewCollection = db.collection("reviews ");
   const verifyAdmin = async (req, res, next) => {
     const email = req.token_email
     const query = {email}
@@ -83,8 +84,10 @@ async function run() {
   });
 
   res.send({ message: "Logged out!" });
-  });
+  }); 
+
   // userCollection
+
     app.get("/users/:email", verifyToken,  async (req, res) => {
       const {email} = req.params
       const query = {email: {$ne: email}}
@@ -128,6 +131,7 @@ async function run() {
     })
 
     // scholarshipCollection
+    
     app.get("/scholarships",verifyToken, async (req, res) => {
       const {search="",subject="",
       category="", limit=6, skip=0} = req.query
@@ -188,6 +192,7 @@ async function run() {
     })
 
     // applicationCollection
+
     app.get("/applications/manage", verifyToken, async (req, res) => {
       const result = await applicationCollection.find().toArray()
       res.send(result)
@@ -245,7 +250,30 @@ async function run() {
       const result = await applicationCollection.deleteOne(query)
       res.send(result)
     })
-    
+
+// reviewCollection 
+
+   app.get("/reviews", async (req, res) => {
+    const result = await reviewCollection.find().toArray()
+    res.send(result)
+   })
+   app.get("/reviews/:email", async (req, res) => {
+     const {email} = req.params
+      const query = {userEmail: email}
+      const result = await reviewCollection.find(query).toArray()
+      res.send(result)
+   })
+   app.post("/reviews", async (req, res) => {
+    const newReview = req.body
+    const result = await reviewCollection.insertOne(newReview)
+    res.send(result)
+   })
+   app.delete("/reviews/:id", async (req, res) => {
+    const {id} = req.params;
+      const query = {_id: new ObjectId(id)}
+      const result = await reviewCollection.deleteOne(query)
+      res.send(result)
+   })
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"

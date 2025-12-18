@@ -361,36 +361,54 @@ async function run() {
 
   // admin status
 
-  app.get("/admin-stats", async (req, res) => {
-  const usersCount = await userCollection.countDocuments();
-  const scholarshipCount = await scholarshipCollection.countDocuments();
-  const feesResult = await applicationCollection.aggregate([
-    {
-      $addFields: {
-        applicationFeesNum: { $toInt: "$applicationFees" },
-        serviceChargeNum: { $toInt: "$serviceCharge" }
-      }
-    },
-    {
-      $group: {
-        _id: null,
-        totalFees: {
-          $sum: {
-            $add: ["$applicationFeesNum", "$serviceChargeNum"]
+    app.get("/admin-stats", async (req, res) => {
+    const usersCount = await userCollection.countDocuments();
+    const scholarshipCount = await scholarshipCollection.countDocuments();
+    const feesResult = await applicationCollection.aggregate([
+      {
+        $addFields: {
+          applicationFeesNum: { $toInt: "$applicationFees" },
+          serviceChargeNum: { $toInt: "$serviceCharge" }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalFees: {
+            $sum: {
+              $add: ["$applicationFeesNum", "$serviceChargeNum"]
+            }
           }
         }
       }
-    }
-  ]).toArray();
+    ]).toArray();
 
-  res.send({
-    totalUsers: usersCount,
-    totalScholarships: scholarshipCount,
-    totalFeesCollected: feesResult[0]?.totalFees || 0
+    res.send({
+      totalUsers: usersCount,
+      totalScholarships: scholarshipCount,
+      totalFeesCollected: feesResult[0]?.totalFees || 0
+    });
   });
-});
 
+  app.get("/application-chart-data", async (req, res) => {
+    const universityData = await applicationCollection.aggregate([
+      {
+        $group: {
+          _id: "$universityName",
+          total: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          name: "$_id",
+          value: "$total"
+        }
+      }
+    ]).toArray();
 
+    res.send(universityData);
+  });
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"

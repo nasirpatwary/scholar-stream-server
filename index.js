@@ -46,11 +46,23 @@ async function run() {
   const scholarshipCollection = db.collection("scholarships");
   const applicationCollection = db.collection("applications ");
   const reviewCollection = db.collection("reviews ");
+
+  // verify admin
   const verifyAdmin = async (req, res, next) => {
     const email = req.token_email
     const query = {email}
     const user = await userCollection.findOne(query)
     if (!user || !user.role === "admin") {
+      return res.status(403).send({ message: "forbidden access" });
+    }
+    next()
+  }
+  // verify moderator
+  const verifyModerator = async (req, res, next) => {
+    const email = req.token_email
+    const query = {email}
+    const user = await userCollection.findOne(query)
+    if (!user || !user.role === "moderator") {
       return res.status(403).send({ message: "forbidden access" });
     }
     next()
@@ -288,7 +300,7 @@ async function run() {
    })
 
   //  paymet checkout 
-   app.post('/create-checkout-session', async (req, res) => {
+   app.post('/create-checkout-session',verifyToken, async (req, res) => {
    const {
       scholarshipId,
       scholarshipName,
@@ -318,16 +330,67 @@ async function run() {
 
   res.send({ url: session.url });
 });
-app.patch('/session-status', async (req, res) => {
+    app.put('/session-status',verifyToken,  async (req, res) => {
     const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
-    console.log(session )
-    if (session.payment_status === "paid") {
-      const scholarshipId = session.metadata.scholarshipId;
+    const transactionId = session.payment_intent
+    const queryTransactionId = {transactionId}
+    const existApplication = await applicationCollection.findOne(queryTransactionId)
+    if(existApplication) return res.send({message: "already exists", transactionId })
+      if (session.payment_status === "paid") {
+      const scholarshipId = session.metadata.scholarshipId
       const query = {scholarshipId}
-      const result = await applicationCollection.updateOne(query, {$set: {paymentStatus: "paid"}})
-      res.send(result)
+      const update = {
+      $set: {
+        paymentStatus: "paid",
+        transactionId,
+      },
+    };
+    const options = {
+      returnDocument: "after",
+    };
+      const result = await applicationCollection.findOneAndUpdate(query, update, options)
+      res.send({
+        transactionId: result.transactionId, 
+        universityCity: result.universityCity,
+        scholarshipName: result.universityCity,
+        applicationFees: result.applicationFees,
+        serviceCharge: result.serviceCharge
+      })
     }
   });
+
+  // admin status
+
+  app.get("/admin-stats", async (req, res) => {
+  const usersCount = await userCollection.countDocuments();
+  const scholarshipCount = await scholarshipCollection.countDocuments();
+  const feesResult = await applicationCollection.aggregate([
+    {
+      $addFields: {
+        applicationFeesNum: { $toInt: "$applicationFees" },
+        serviceChargeNum: { $toInt: "$serviceCharge" }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalFees: {
+          $sum: {
+            $add: ["$applicationFeesNum", "$serviceChargeNum"]
+          }
+        }
+      }
+    }
+  ]).toArray();
+
+  res.send({
+    totalUsers: usersCount,
+    totalScholarships: scholarshipCount,
+    totalFeesCollected: feesResult[0]?.totalFees || 0
+  });
+});
+
+
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"

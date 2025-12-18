@@ -6,6 +6,7 @@ const cookieParser = require('cookie-parser')
 const jwt = require('jsonwebtoken');
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // middleware
 app.use(express.json());
@@ -15,7 +16,6 @@ app.use(cors({
   credentials: true
 }));
   const isProd = process.env.NODE_ENV === "production";
-
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(process.env.URI, {
   serverApi: {
@@ -95,7 +95,7 @@ async function run() {
       res.send(result)
 
     })
-    app.get("/users/:email/role", async (req, res) => {
+    app.get("/users/:email/role", verifyToken, async (req, res) => {
       const {email} = req.params;
       const query = {email}
       const user = await userCollection.findOne(query)
@@ -116,6 +116,7 @@ async function run() {
       const result = await userCollection.insertOne({
         ...newUser,
         role: "student",
+        createdAt: new Date()
       });
       res.send(result);
     });
@@ -131,7 +132,7 @@ async function run() {
     })
 
     // scholarshipCollection
-    
+
     app.get("/scholarships",verifyToken, async (req, res) => {
       const {search="",subject="",
       category="", limit=6, skip=0} = req.query
@@ -203,7 +204,7 @@ async function run() {
       const result = await applicationCollection.find(query).toArray()
       res.send(result)
     })
-      app.get("/applications/:id/details", verifyToken, async (req, res) => {
+    app.get("/applications/:id/details", verifyToken, async (req, res) => {
       const {id} = req.params
       const query = {_id: new ObjectId(id)}
       const result = await applicationCollection.findOne(query)
@@ -253,27 +254,80 @@ async function run() {
 
 // reviewCollection 
 
-   app.get("/reviews", async (req, res) => {
+   app.get("/reviews", verifyToken, async (req, res) => {
     const result = await reviewCollection.find().toArray()
     res.send(result)
    })
-   app.get("/reviews/:email", async (req, res) => {
+   app.get("/reviews/:email",verifyToken, async (req, res) => {
      const {email} = req.params
       const query = {userEmail: email}
       const result = await reviewCollection.find(query).toArray()
       res.send(result)
    })
-   app.post("/reviews", async (req, res) => {
+   app.post("/reviews", verifyToken, async (req, res) => {
     const newReview = req.body
     const result = await reviewCollection.insertOne(newReview)
     res.send(result)
    })
-   app.delete("/reviews/:id", async (req, res) => {
+   app.patch("/reviews/:id/update/review", verifyToken, async (req, res) => {
+    const {id} = req.params;
+      const review = req.body
+      const query = {_id: new ObjectId(id)}
+      const updateDoc = {
+        $set: review
+      }
+      const result = await reviewCollection.updateOne(query, updateDoc)
+      res.send(result)
+   })
+
+   app.delete("/reviews/:id", verifyToken, async (req, res) => {
     const {id} = req.params;
       const query = {_id: new ObjectId(id)}
       const result = await reviewCollection.deleteOne(query)
       res.send(result)
    })
+
+  //  paymet checkout 
+   app.post('/create-checkout-session', async (req, res) => {
+   const {
+      scholarshipId,
+      scholarshipName,
+      universityName,
+      userEmail,
+      totalAmount } = req.body
+  const amount = parseInt(totalAmount) * 100
+  const session = await stripe.checkout.sessions.create({
+    line_items: [
+      {
+       price_data:{
+        currency: "usd",
+        unit_amount: amount,
+        product_data: {
+          name: universityName || scholarshipName
+        }
+       },
+        quantity: 1,
+      },
+    ],
+    mode: 'payment',
+    metadata: {scholarshipId},
+    customer_email: userEmail,
+    success_url: `${process.env.DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.DOMAIN}/dashboard/payment-cancelled`,
+  });
+
+  res.send({ url: session.url });
+});
+app.patch('/session-status', async (req, res) => {
+    const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
+    console.log(session )
+    if (session.payment_status === "paid") {
+      const scholarshipId = session.metadata.scholarshipId;
+      const query = {scholarshipId}
+      const result = await applicationCollection.updateOne(query, {$set: {paymentStatus: "paid"}})
+      res.send(result)
+    }
+  });
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"

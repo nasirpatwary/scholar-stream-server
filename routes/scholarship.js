@@ -52,6 +52,7 @@ router.get("/:email/manage", verifyToken, isAdmin, async (req, res) => {
   };
   const result = await scholarshipCollection
     .find(query)
+    .sort({scholarshipPostDate: -1})
     .project(project)
     .toArray();
   res.send(result);

@@ -4,7 +4,7 @@ const { verifyToken, isAdmin } = require("../middleware/authMiddleware");
 const { scholarshipCollection, ObjectId } = require("../config/db");
 const router = express.Router();
 
-router.get("/", verifyToken, isAdmin, async (req, res) => {
+router.get("/", verifyToken, async (req, res) => {
   const {
     search = "",
     subject = "",
